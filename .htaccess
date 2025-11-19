@@ -1,0 +1,9 @@
+RewriteEngine On
+RewriteCond %{SERVER_PORT} !=443
+RewriteRule ^ https://app.barril.cl%{REQUEST_URI} [NS,R,L]
+
+
+RewriteRule ^central-de-despacho$ ./?s=central-de-despacho
+
+
+RewriteRule ^404$ ./index.php?s=404
