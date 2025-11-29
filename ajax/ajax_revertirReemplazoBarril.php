@@ -22,6 +22,7 @@
         $barril_cambiar = new Barril($barril_reemplazo->id_barriles_devuelto);
         $barril_cambiar->id_clientes = $barril->id_clientes;
         $barril_cambiar->estado = "En terreno";
+        $barril_cambiar->registrarCambioDeEstado();
         $barril_cambiar->save();
 
         $ep = $entregas_productos[0];
@@ -35,6 +36,7 @@
         $barril->estado = "En planta";
         $barril->id_clientes = 0;
         $barril->id_batches = 0;
+        $barril->registrarCambioDeEstado();
         $barril->save();
 
     }

@@ -1,7 +1,7 @@
 <?php
 
     $usuario = $GLOBALS['usuario'];
-    $despachos = Despacho::getAll("WHERE id_usuarios_repartidor='".$usuario->id."' ORDER BY id desc");
+    $despachos = Despacho::getAll("WHERE id_usuarios_repartidor='".$usuario->id."' AND estado='En despacho' ORDER BY id desc");
 
     $rand_int = rand(0,2147483640);
 
@@ -9,9 +9,85 @@
     $clientes_barriles = $barriles_obj->getClientesBarriles();
     $clientes = Cliente::getAll("WHERE estado='Activo' ORDER BY nombre asc");
 
-?>
+    // Preparar despachos con sus productos agrupados por cliente
+    $despachos_por_cliente = array();
+    foreach($despachos as $despacho) {
+        $id_cliente = $despacho->id_clientes;
+        if(!isset($despachos_por_cliente[$id_cliente])) {
+            $despachos_por_cliente[$id_cliente] = array();
+        }
 
-<h1>Entregar Productos</h1>
+        $productos_despacho = DespachoProducto::getAll("WHERE id_despachos='".$despacho->id."'");
+        $productos_arr = array();
+
+        foreach($productos_despacho as $dp) {
+            $caja_envases = null;
+            $es_mixta = false;
+            $codigo_mostrar = $dp->codigo;
+            $contenido_resumen = '';
+
+            if($dp->tipo == "CajaEnvases" && $dp->id_cajas_de_envases > 0) {
+                $caja_envases = new CajaDeEnvases($dp->id_cajas_de_envases);
+                $es_mixta = $caja_envases->esMixta();
+                $codigo_mostrar = $caja_envases->codigo;
+                if($es_mixta) {
+                    $contenido_resumen = $caja_envases->getContenidoResumen();
+                }
+            }
+
+            $productos_arr[] = array(
+                'id' => $dp->id,
+                'tipo' => $dp->tipo,
+                'cantidad' => $dp->cantidad,
+                'tipos_cerveza' => $dp->tipos_cerveza,
+                'codigo' => $codigo_mostrar,
+                'id_cajas_de_envases' => $dp->id_cajas_de_envases,
+                'es_mixta' => $es_mixta,
+                'contenido_resumen' => $contenido_resumen
+            );
+        }
+
+        $despachos_por_cliente[$id_cliente][] = array(
+            'id' => $despacho->id,
+            'creada' => $despacho->creada,
+            'productos' => $productos_arr
+        );
+    }
+
+?>
+<style>
+.tr-entregas {
+  cursor: pointer;
+}
+.despacho-card {
+  cursor: pointer;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+}
+.despacho-card:hover {
+  background-color: rgba(0,0,0,0.02);
+}
+.despacho-card.selected {
+  border-color: #0d6efd;
+  box-shadow: 0 0.5rem 1rem rgba(13, 110, 253, 0.25);
+}
+</style>
+<div class="d-sm-flex align-items-center justify-content-between mb-3">
+  <div class="mb-2">
+    <h1 class="h3 mb-0 text-gray-800">
+      <b><i class="fas fa-fw fa-truck"></i> Entregar Productos</b>
+    </h1>
+  </div>
+  <div>
+    <?php $usuario->printReturnBtn(); ?>
+  </div>
+</div>
+<hr />
+
+<?php
+  Msg::show(1, '<i class="fas fa-check-circle me-2"></i> Entrega realizada con exito.', 'success');
+?>
 
 <div class="row mt-3">
     <div class="col-md-6 mb-3">
@@ -41,7 +117,7 @@
                             <thead>
                                 <tr>
                                     <th>
-                                        Código
+                                        Codigo
                                     </th>
                                     <th>
                                         Estado
@@ -60,64 +136,24 @@
     <div class="col-md-6">
         <div class="card">
             <div class="card-body">
-                <div class="fw-bold">
-                    Entrega:
+                <div class="fw-bold mb-3">
+                    Despachos para entregar:
                 </div>
-                <table class="table table-striped table-sm mt-2">
-                    <thead class="thead-dark">
-                        <tr>
-                            <th>
-                            </th>
-                            <th>
-                                Tipo
-                            </th>
-                            <th>
-                                Cantidad
-                            </th>
-                            <th>
-                                Tipo Cerveza
-                            </th>
-                            <th>
-                                Codigo
-                            </th>
-                        </tr>
-                    </thead>
-                        <tbody>
-                            <?php
-                            foreach($despachos as $despacho) {
-                                $despacho_productos = DespachoProducto::getAll("WHERE id_despachos='".$despacho->id."'");
-                                foreach($despacho_productos as $dp) {
-                            ?>
-                            <tr>
-                                <td>
-                                    <input type="checkbox" class="despacho-checkbox" data-id="<?= $dp->id; ?>" data-tipo="<?= $dp->tipo; ?>" DISABLED>
-                                </td>
-                                <td>
-                                    <?= $dp->tipo; ?>
-                                </td>
-                                <td>
-                                    <?= $dp->cantidad; ?>
-                                </td>
-                                <td>
-                                    <?= $dp->tipos_cerveza; ?>
-                                </td>
-                                <td>
-                                    <?= $dp->codigo; ?>
-                                </td>
-                            </tr>
-                            <?php
-                                }
-                            }
-                            ?>
-                        </tbody>
-                    </table>
-                    <div class="mt-3">
-                        <b class="total">0</b> despachos seleccionados
-                    </div>
-                    <button class="btn btn-primary shadow-sm w-100 mt-3 mb-2" disabled="true" id="entregar-cliente-btn" data-bs-toggle="modal" data-bs-target="#entregarModal">Entregar a Cliente <i class="fas fa-fw fa-forward"></i></button>
 
+                <div id="despachos-container">
+                    <div class="text-center text-muted py-4" id="despachos-placeholder">
+                        <i class="fas fa-hand-pointer fa-2x mb-2"></i>
+                        <p>Selecciona un cliente para ver sus despachos</p>
+                    </div>
                 </div>
+
+                <div class="mt-3">
+                    <b class="total">0</b> despacho(s) seleccionado(s)
+                </div>
+                <button class="btn btn-primary shadow-sm w-100 mt-3 mb-2" disabled="true" id="entregar-cliente-btn" data-bs-toggle="modal" data-bs-target="#entregarModal">Entregar a Cliente <i class="fas fa-fw fa-forward"></i></button>
+
             </div>
+        </div>
     </div>
 </div>
 
@@ -168,28 +204,40 @@
 
 <script>
 
-    var clientes_barriles = <?= json_encode($clientes_barriles,JSON_PRETTY_PRINT); ?>;
+    var clientes_barriles = <?= json_encode($clientes_barriles, JSON_PRETTY_PRINT); ?>;
+    var despachos_por_cliente = <?= json_encode($despachos_por_cliente, JSON_PRETTY_PRINT); ?>;
+    var estados_barril_repartidor = <?= json_encode($estados_barril_repartidor, JSON_PRETTY_PRINT); ?>;
     var paso_2_disabled = true;
 
-    console.log(clientes_barriles); 
+    console.log('clientes_barriles:', clientes_barriles);
+    console.log('despachos_por_cliente:', despachos_por_cliente);
 
     $(document).on('change','#id_clientes-select', function(e){
 
-        console.log($(e.currentTarget).val());
+        var id_cliente = $(e.currentTarget).val();
+        console.log('Cliente seleccionado:', id_cliente);
 
-        if($(e.currentTarget).val() == 0) {
+        // Reset selecciones
+        ids_despachos_productos = [];
+        ids_cajas_envases = [];
+        despachos_seleccionados = [];
+        actualizarContador();
+
+        if(id_cliente == 0) {
             paso_2_disabled = true;
             $('#clientes_barriles-warning-div').show(200);
             $('#entregar-cliente-btn').attr('disabled', true);
             $('#barriles-table-tbody').empty();
-            $('.despacho-checkbox').attr('checked',false);
-            $('.despacho-checkbox').attr('disabled',true);
+            $('#despachos-container').html('<div class="text-center text-muted py-4" id="despachos-placeholder"><i class="fas fa-hand-pointer fa-2x mb-2"></i><p>Selecciona un cliente para ver sus despachos</p></div>');
             return false;
         }
 
-        cliente_barril = undefined;
+        // Renderizar despachos del cliente
+        renderizarDespachos(id_cliente);
 
-        var cliente_barril = clientes_barriles.find( (cb) => cb.obj.id == $(e.currentTarget).val());
+        // Manejar barriles del cliente
+        cliente_barril = undefined;
+        var cliente_barril = clientes_barriles.find( (cb) => cb.obj.id == id_cliente);
         if(cliente_barril === undefined) {
             $('#barriles-table-container').hide(200);
         } else {
@@ -201,21 +249,90 @@
                 html += '<td>';
                 html += '<select class="form-control barril-estado" name="' + barril.id + '">';
                 html += '<option value="0">-</option>';
-                html += '<option>En terreno</option>';
-                html += '<option>Pinchado</option>';
-                html += '<option>Perdido</option>';
-                html += '<option>Devuelto a planta</option>';
+                estados_barril_repartidor.forEach(function(estado){
+                    if(estado !== 'En despacho') {
+                        html += '<option>' + estado + '</option>';
+                    }
+                });
                 html += '</select>';
                 html += '</td>';
             });
             $('#barriles-table-tbody').html(html);
             $('#barriles-table-container').show(200);
-
         }
 
         checkBarrilesEstado();
 
     });
+
+    function renderizarDespachos(id_cliente) {
+        var despachos = despachos_por_cliente[id_cliente] || [];
+        console.log('Despachos encontrados para cliente ' + id_cliente + ':', despachos);
+
+        if(despachos.length === 0) {
+            $('#despachos-container').html('<div class="text-center text-muted py-4"><i class="fas fa-box-open fa-2x mb-2"></i><p>No hay despachos pendientes para este cliente</p></div>');
+            return;
+        }
+
+        var html = '';
+        despachos.forEach(function(despacho) {
+            // Preparar data de productos para el data attribute
+            var productos_ids = despacho.productos.map(function(p) { return p.id; });
+            var cajas_envases_ids = despacho.productos.filter(function(p) {
+                return p.tipo === 'CajaEnvases' && p.id_cajas_de_envases && p.id_cajas_de_envases != '0';
+            }).map(function(p) { return p.id_cajas_de_envases; });
+
+            var tiene_vasos = despacho.productos.some(function(p) { return p.tipo === 'Vasos'; });
+
+            html += '<div class="card despacho-card mb-3" data-id-despacho="' + despacho.id + '" data-productos-ids=\'' + JSON.stringify(productos_ids) + '\' data-cajas-envases-ids=\'' + JSON.stringify(cajas_envases_ids) + '\' data-tiene-vasos="' + (tiene_vasos ? '1' : '0') + '">';
+            html += '<div class="card-body">';
+            html += '<div class="d-flex justify-content-between align-items-center mb-2">';
+            html += '<h6 class="card-title mb-0"><i class="fas fa-truck me-2"></i>Despacho #' + despacho.id + '</h6>';
+            html += '<small class="text-muted">' + despacho.creada + '</small>';
+            html += '</div>';
+
+            // Tabla de productos
+            html += '<table class="table table-sm table-bordered mb-0">';
+            html += '<thead class="table-light"><tr><th>Tipo</th><th>Cant.</th><th>Cerveza</th><th>Codigo</th></tr></thead>';
+            html += '<tbody>';
+
+            despacho.productos.forEach(function(producto) {
+                html += '<tr>';
+
+                // Tipo con icono
+                if(producto.tipo === 'CajaEnvases') {
+                    html += '<td><i class="fas fa-box text-success me-1"></i> Caja Envases';
+                    if(producto.es_mixta) {
+                        html += ' <span class="badge bg-warning text-dark">MIXTO</span>';
+                    }
+                    html += '</td>';
+                } else if(producto.tipo === 'Barril') {
+                    html += '<td><i class="fas fa-beer text-secondary me-1"></i> ' + producto.tipo + '</td>';
+                } else if(producto.tipo === 'Caja') {
+                    html += '<td><i class="fas fa-box text-info me-1"></i> ' + producto.tipo + '</td>';
+                } else {
+                    html += '<td>' + producto.tipo + '</td>';
+                }
+
+                html += '<td>' + producto.cantidad + '</td>';
+
+                // Cerveza
+                if(producto.es_mixta && producto.contenido_resumen) {
+                    html += '<td>' + producto.contenido_resumen + '</td>';
+                } else {
+                    html += '<td>' + (producto.tipos_cerveza || '-') + '</td>';
+                }
+
+                html += '<td>' + (producto.codigo || '-') + '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            html += '</div></div>';
+        });
+
+        $('#despachos-container').html(html);
+    }
 
     function checkBarrilesEstado() {
 
@@ -228,7 +345,7 @@
             }
         }
 
-        console.log('disabled: ' + disabled);
+        console.log('Barriles estado disabled:', disabled);
 
         paso_2_disabled = disabled;
         paso2Disable();
@@ -236,16 +353,17 @@
     }
 
     function paso2Disable() {
-
-        $('.despacho-checkbox').attr('disabled', paso_2_disabled);
-        //$('#entregar-cliente-btn').attr('disabled', paso_2_disabled);
-
         if(!paso_2_disabled) {
             $('#clientes_barriles-warning-div').hide(200);
         } else {
             $('#clientes_barriles-warning-div').show(200);
             $('#entregar-cliente-btn').attr('disabled', true);
-            $('.despacho-checkbox').attr('checked',false);
+            // Deseleccionar todas las cards
+            $('.despacho-card').removeClass('selected');
+            ids_despachos_productos = [];
+            ids_cajas_envases = [];
+            despachos_seleccionados = [];
+            actualizarContador();
         }
     }
 
@@ -253,35 +371,106 @@
     $(document).on('change','.barril-estado',checkBarrilesEstado);
 
     var ids_despachos_productos = [];
+    var ids_cajas_envases = [];
+    var despachos_seleccionados = [];
     var vasos = false;
 
     $(document).on('click','.tr-entregas',function(e){
         window.location.href = "./?s=detalle-entregas&id=" + $(e.currentTarget).data('identregas');
     });
 
-$(document).on('change','.despacho-checkbox',function() {
+    // Click en card de despacho
+    $(document).on('click', '.despacho-card', function(e) {
+        if(paso_2_disabled) {
+            console.log('Click bloqueado - paso_2_disabled es true');
+            return false;
+        }
 
-    ids_despachos_productos = [];
-    total = 0;
-    vasos = false;
+        var $card = $(this);
+        var id_despacho = $card.data('id-despacho');
+        var productos_ids = $card.data('productos-ids');
+        var cajas_ids = $card.data('cajas-envases-ids');
+        var tiene_vasos = $card.data('tiene-vasos') === '1';
 
-    $('.despacho-checkbox').each(function(){
-        if($(this).is(':checked')){
-            total += 1;
-            ids_despachos_productos.push($(this).data('id'));
-            if($(this).data('tipo') == "Vasos") {
+        console.log('Despacho clickeado:', id_despacho);
+        console.log('Productos IDs:', productos_ids);
+        console.log('Cajas envases IDs:', cajas_ids);
+
+        if($card.hasClass('selected')) {
+            // Deseleccionar
+            $card.removeClass('selected');
+
+            // Remover del array de seleccionados
+            despachos_seleccionados = despachos_seleccionados.filter(function(id) { return id !== id_despacho; });
+
+            // Remover productos
+            productos_ids.forEach(function(pid) {
+                ids_despachos_productos = ids_despachos_productos.filter(function(id) { return id !== pid; });
+            });
+
+            // Remover cajas envases
+            if(cajas_ids && cajas_ids.length > 0) {
+                cajas_ids.forEach(function(cid) {
+                    ids_cajas_envases = ids_cajas_envases.filter(function(id) { return id !== cid; });
+                });
+            }
+
+            console.log('Despacho DESELECCIONADO:', id_despacho);
+        } else {
+            // Seleccionar
+            $card.addClass('selected');
+
+            // Agregar al array de seleccionados
+            despachos_seleccionados.push(id_despacho);
+
+            // Agregar productos
+            productos_ids.forEach(function(pid) {
+                if(ids_despachos_productos.indexOf(pid) === -1) {
+                    ids_despachos_productos.push(pid);
+                }
+            });
+
+            // Agregar cajas envases
+            if(cajas_ids && cajas_ids.length > 0) {
+                cajas_ids.forEach(function(cid) {
+                    if(ids_cajas_envases.indexOf(cid) === -1) {
+                        ids_cajas_envases.push(cid);
+                    }
+                });
+            }
+
+            if(tiene_vasos) {
                 vasos = true;
             }
-        }
-    })
-    $('.total').html(total);
-    if(total == 0) {
-        $('#entregar-cliente-btn').attr('disabled',true);
-    } else {
-        $('#entregar-cliente-btn').attr('disabled',false);
-    }
 
-});
+            console.log('Despacho SELECCIONADO:', id_despacho);
+        }
+
+        console.log('Despachos seleccionados:', despachos_seleccionados);
+        console.log('IDs productos seleccionados:', ids_despachos_productos);
+        console.log('IDs cajas envases:', ids_cajas_envases);
+
+        actualizarContador();
+    });
+
+    function actualizarContador() {
+        var total = despachos_seleccionados.length;
+        $('.total').html(total);
+
+        if(total === 0 || paso_2_disabled) {
+            $('#entregar-cliente-btn').attr('disabled', true);
+        } else {
+            $('#entregar-cliente-btn').attr('disabled', false);
+        }
+
+        // Verificar si hay vasos en alguno de los despachos seleccionados
+        vasos = false;
+        $('.despacho-card.selected').each(function() {
+            if($(this).data('tiene-vasos') === '1') {
+                vasos = true;
+            }
+        });
+    }
 
 
 $(document).on('change','#cantidad-vasos-select',function(){
@@ -308,6 +497,7 @@ $(document).on('click','#guardar-btn',entregar);
     var url = "./ajax/ajax_guardarEntrega.php";
     var data = {
         'ids_despachos_productos': ids_despachos_productos,
+        'ids_cajas_envases': ids_cajas_envases,
         'id_clientes': $('#id_clientes-select').val(),
         'id_usuarios_repartidor': <?= $usuario->id; ?>,
         'cantidad_vasos': $('#cantidad-vasos-select').val(),
@@ -316,17 +506,26 @@ $(document).on('click','#guardar-btn',entregar);
         'barriles_estado': getDataForm('barriles')
     };
 
+    console.log('=== ENVIANDO ENTREGA ===');
+    console.log('URL:', url);
+    console.log('Payload:', data);
+    console.log('========================');
+
     $.post(url,data,function(response_raw){
-        console.log(response_raw);
+        console.log('Respuesta raw:', response_raw);
         var response = JSON.parse(response_raw);
         if(response.mensaje!="OK") {
+            console.error('Error en respuesta:', response);
             alert("Algo fallo");
             return false;
         } else {
-        var obj = response.obj;
+            console.log('Entrega exitosa:', response);
+            var obj = response.obj;
             window.location.href = "./?s=repartidor&msg=1&id_entregas=" + obj.id;
         }
-    }).fail(function(){
+    }).fail(function(xhr, status, error){
+        console.error('Error AJAX:', status, error);
+        console.error('Response:', xhr.responseText);
         alert("No funciono");
     });
 

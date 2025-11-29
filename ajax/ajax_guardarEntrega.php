@@ -45,6 +45,25 @@ $obj->creada = date('Y-m-d H:i:s');
 $obj->estado = "Entregada";
 
 $cliente = new Cliente($obj->id_clientes);
+
+// Validar que todos los productos pertenezcan a despachos del cliente seleccionado
+if (isset($_POST['ids_despachos_productos']) && is_array($_POST['ids_despachos_productos'])) {
+    foreach ($_POST['ids_despachos_productos'] as $id_dp) {
+        $dp_validar = new DespachoProducto($id_dp);
+        if ($dp_validar->id) {
+            $despacho_validar = new Despacho($dp_validar->id_despachos);
+            // Solo validar si el despacho tiene cliente asignado
+            if ($despacho_validar->id_clientes > 0 && $despacho_validar->id_clientes != $obj->id_clientes) {
+                $response = array(
+                    "status" => "ERROR",
+                    "mensaje" => "El producto pertenece a un despacho destinado a otro cliente"
+                );
+                print json_encode($response, JSON_PRETTY_PRINT);
+                exit;
+            }
+        }
+    }
+}
 $fecha = new DateTime();
 if ($cliente->criterio == "Martes siguiente") {
     $fecha->modify("next tuesday");
@@ -90,6 +109,11 @@ foreach ($_POST['ids_despachos_productos'] as $id_despacho_producto) {
     } elseif ($ep->tipo == "Vasos") {
         $ep->cantidad = $_POST['cantidad_vasos'];
         $ep->save();
+    } elseif ($ep->tipo == "CajaEnvases" && $ep->id_cajas_de_envases > 0) {
+        // Cambiar estado de la caja de envases a "Entregada"
+        $caja = new CajaDeEnvases($ep->id_cajas_de_envases);
+        $caja->estado = "Entregada";
+        $caja->save();
     }
 
     $despachos_productos = DespachoProducto::getAll("WHERE id_despachos='" . $id_despachos . "'");

@@ -19,6 +19,7 @@
 
   $obj = new Barril($_POST['id']);
   $obj->estado = "Perdido";
+  $obj->registrarCambioDeEstado();
   $obj->save();
 
   Historial::guardarAccion("Barril #".$obj->id." marcado como Perdido.",$GLOBALS['usuario']);

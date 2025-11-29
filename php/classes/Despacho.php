@@ -3,6 +3,7 @@
     class Despacho extends Base {
 
     public $id_usuarios_repartidor;
+    public $id_clientes = 0;
     public $tipo_de_entrega;
     public $estado = "En despacho";
     public $creada;
@@ -29,9 +30,17 @@
           $barril = new Barril($dp->id_barriles);
           $barril->estado = "En planta";
           $barril->id_clientes = 0;
-          $barril->id_batches = 0;
+          // No limpiar id_batches para mantener trazabilidad (el barril aún tiene cerveza)
           $barril->registrarCambioDeEstado();
           $barril->save();
+        }
+        // Revertir cajas de envases a estado "En planta"
+        if($dp->tipo=="CajaEnvases" && $dp->id_cajas_de_envases > 0) {
+          $caja = new CajaDeEnvases($dp->id_cajas_de_envases);
+          if($caja->id) {
+            $caja->estado = "En planta";
+            $caja->save();
+          }
         }
         $dp->delete();
       }

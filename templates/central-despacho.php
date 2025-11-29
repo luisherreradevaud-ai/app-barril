@@ -1,333 +1,320 @@
 <?php
 
-
-  //checkAutorizacion(["Jefe de Planta","Administrador"]);
-  
-  $msg = 0;
-  if(isset($_GET['msg'])) {
-    $msg = $_GET['msg'];
-  }
-
-  $despachos = Despacho::getAll("ORDER BY id desc");
+  $despachos = Despacho::getAll("WHERE estado != 'eliminado' ORDER BY id desc");
   $usuario = $GLOBALS['usuario'];
 
-
-  $barriles_disponibles = Barril::getAll("WHERE litros_cargados!=litraje AND estado='En planta' AND clasificacion='Cerveza' ORDER BY codigo asc");
-
-  $batches_activos_maduracion = BatchActivo::getAll("JOIN activos 
-        ON activos.id = batches_activos.id_activos
-      WHERE activos.clase = 'Fermentador'
-        AND batches_activos.litraje > 0
-        AND (
-          (activos.codigo LIKE 'BD%' 
-            AND batches_activos.estado = 'Maduración')
-          OR activos.codigo NOT LIKE 'BD%'
-        )
-      ORDER BY batches_activos.id_batches ASC");
-  $ba_maduracion = [];
-  foreach($batches_activos_maduracion as $baf) {
-    $ba_maduracion[$baf->id_batches][$baf->id] = $baf;
+  // Agrupar despachos por repartidor
+  $despachos_por_repartidor = array();
+  foreach($despachos as $despacho) {
+    $id_repartidor = $despacho->id_usuarios_repartidor;
+    if(!isset($despachos_por_repartidor[$id_repartidor])) {
+      $despachos_por_repartidor[$id_repartidor] = array();
+    }
+    $despachos_por_repartidor[$id_repartidor][] = $despacho;
   }
 
-
 ?>
+
 <style>
-.tr-despachos {
-  cursor: pointer;
+.toggle-icon {
+  transition: transform 0.2s ease;
+}
+.despacho-row:hover {
+  background-color: rgba(0,0,0,0.02);
+}
+.collapse-row td {
+  background-color: transparent !important;
 }
 </style>
-<div class="d-sm-flex align-items-center justify-content-between mb-3">
-  <div class="mb-2">
-    <h1 class="h4 mb-0 text-gray-800"><b>Central de Despacho</b></h1>
-  </div>
-  <div>
-    <div>
-      <a href="./?s=nuevo-despachos" class="d-sm-inline-block btn btn-sm btn-primary shadow-sm mb-2"><i class="fas fa-fw fa-plus"></i> Nuevo Despacho</a>
-    </div>
-  </div>
-</div>
-<hr />
-<?php
-  if($msg == 1) {
-?>
-<div class="alert alert-info" role="alert" >Despacho creado con &eacute;xito.</div>
-<?php
-  }
-  if($msg == 2) {
-?>
-<div class="alert alert-danger" role="alert" >Despacho eliminado con &eacute;xito.</div>
-<?php
-  }
-  foreach($despachos as $despacho) {
-    $repartidor = new Usuario($despacho->id_usuarios_repartidor);
-    $productos = DespachoProducto::getAll("WHERE id_despachos='".$despacho->id."'");
-?>
-<div class="card w-100 shadow mb-5">
-  <div class="card-body">
-  <div class="row mb-3">
-    <div class="col-md-4 mb-1">
-      <h5 class="card-title mb-3"><i class="fas fa-fw fa-truck"></i> DESPACHO #<?= $despacho->id; ?></h5>
-    </div>
-    <div class="col-md-4 mb-1">
-      Repartidor: <?= $repartidor->nombre; ?>
-    </div>
-    <div class="col-md-4 mb-1">
-      Creado: <?= datetime2fechayhora($despacho->creada); ?>
-    </div>
-  </div>
-    <table class="table table-striped table-sm mt-2">
-      <?php
-      foreach($productos as $dp) {
-        ?>
-        <tr>
-          <td>
-            <?= $dp->clasificacion; ?>
-          </td>
-          <td>
-            <?= $dp->tipo; ?>
-          </td>
-          <td>
-            <?= $dp->cantidad; ?>
-          </td>
-          <td>
-            <?= $dp->tipos_cerveza; ?>
-          </td>
-          <td>
-            <?= $dp->codigo; ?>
-          </td>
-        <?php
-      }
-       ?>
-    </table>
-    <?php
-      if($usuario->nivel == "Administrador" ) {
-    ?>
-    <div class="mt-3 w-100 text-right">
-      <button data-iddespachos="<?= $despacho->id; ?>" class="eliminar-despacho-btn btn btn-sm btn-danger">Eliminar Despacho</button>
-    </div>
-    <?php
-      }
-    ?>
-  </div>
-</div>
-<?php
-  }
-?>
 
+<div class="container-fluid p-0">
 
-<div class="px-2">
-  
-  <br/>
-  <div class="d-flex justify-content-between">
-    <div>
-      <h3>Barriles Cargados</h3>
-    </div>
-    <button class="btn btn-sm btn-primary mb-3" data-bs-toggle="modal" data-bs-target="#llenar-barriles-modal" id="llenar-barriles-btn"> 
-      Llenar Barril
-    </button>
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="h3 mb-0">Central de Despacho</h1>
+    <a href="./?s=nuevo-despachos" class="btn btn-primary">
+      <i class="fas fa-plus me-1"></i> Nuevo Despacho
+    </a>
   </div>
-  <table class="table table-sm table-striped table-bordered shadow">
-      <thead>
+
+  <?php
+  Msg::show(1, '<i class="fas fa-check-circle me-2"></i> Despacho creado con exito.', 'success');
+  Msg::show(2, '<i class="fas fa-trash me-2"></i> Despacho eliminado con exito.', 'danger');
+  ?>
+
+  <?php if(count($despachos) == 0): ?>
+  <div class="card">
+    <div class="card-body text-center py-5">
+      <i class="fas fa-truck fa-3x text-muted mb-3"></i>
+      <h4 class="text-muted">No hay despachos registrados</h4>
+      <p class="text-muted mb-3">Crea un nuevo despacho para comenzar</p>
+      <a href="./?s=nuevo-despachos" class="btn btn-primary">
+        <i class="fas fa-plus me-1"></i> Crear Despacho
+      </a>
+    </div>
+  </div>
+  <?php else: ?>
+
+  <?php foreach($despachos_por_repartidor as $id_repartidor => $despachos_repartidor):
+    $repartidor = new Usuario($id_repartidor);
+    $nombre_repartidor = $id_repartidor > 0 ? $repartidor->nombre : 'Sin Repartidor Asignado';
+  ?>
+  <div class="card mb-4">
+    <div class="card-header">
+      <div class="d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+          <i class="fas fa-user-tie me-2"></i><?= $nombre_repartidor; ?>
+        </h5>
+        <span class="badge bg-primary"><?= count($despachos_repartidor); ?> despacho(s)</span>
+      </div>
+    </div>
+    <div class="card-body p-0">
+      <table class="table table-hover mb-0">
+        <thead class="table-light">
           <tr>
-              <th>
-                  Barril
-              </th>
-              <th>
-                  Batch
-              </th>
-              <th>
-                  Cargado
-              </th>
+            <th class="ps-3"># Despacho</th>
+            <th>Cliente</th>
+            <th class="d-none d-md-table-cell">Productos</th>
+            <th class="d-none d-lg-table-cell">Fecha</th>
+            <th>Estado</th>
+            <th class="text-end pe-3">Acciones</th>
           </tr>
-      </thead>
-      <tbody id="barriles-en-planta-id">
-          <?php
-          /*
-          foreach($barriles_en_planta as $ba) {
-              $batch = new Batch($ba->id_batches);
-              $receta = new Receta($batch->id_recetas);
-              //print_r($batch);
-              ?>
-              <tr data-idbarriles="<?= $ba->id; ?>">
-                  <td>
-                      <?= $ba->codigo; ?>
-                  </td>
-                  <td>
-                      <?= $receta->nombre; ?> - #<?= $batch->id; ?>
-                  </td>
-                  <td>
-                      <?= $ba->litros_cargados; ?>L
-              </tr>
-              <?php
-          }*/
+        </thead>
+        <tbody>
+          <?php foreach($despachos_repartidor as $despacho):
+            $cliente = new Cliente($despacho->id_clientes);
+            $productos = DespachoProducto::getAll("WHERE id_despachos='".$despacho->id."'");
+            $total_productos = count($productos);
+            $barriles = 0;
+            $cajas = 0;
+            $cajas_envases = 0;
+            foreach($productos as $dp) {
+              if($dp->tipo == 'Barril') $barriles++;
+              elseif($dp->tipo == 'Caja') $cajas++;
+              elseif($dp->tipo == 'CajaEnvases') $cajas_envases++;
+            }
           ?>
-      </tbody>
-    </table>
+          <tr class="despacho-row" data-bs-toggle="collapse" data-bs-target="#detalle-despacho-<?= $despacho->id; ?>" style="cursor: pointer;">
+            <td class="ps-3">
+              <i class="fas fa-chevron-right me-2 toggle-icon text-muted"></i>
+              <strong>#<?= $despacho->id; ?></strong>
+            </td>
+            <td>
+              <?php if($despacho->id_clientes > 0): ?>
+                <i class="fas fa-store me-1 text-muted"></i><?= $cliente->nombre; ?>
+              <?php else: ?>
+                <span class="text-muted"><i class="fas fa-store me-1"></i>Sin asignar</span>
+              <?php endif; ?>
+            </td>
+            <td class="d-none d-md-table-cell">
+              <?php if($barriles > 0): ?>
+                <span class="badge bg-secondary me-1"><i class="fas fa-beer me-1"></i><?= $barriles; ?> <?= $barriles == 1 ? 'Barril' : 'Barriles'; ?></span>
+              <?php endif; ?>
+              <?php if($cajas > 0): ?>
+                <span class="badge bg-info me-1"><i class="fas fa-box me-1"></i><?= $cajas; ?> <?= $cajas == 1 ? 'Caja' : 'Cajas'; ?></span>
+              <?php endif; ?>
+              <?php if($cajas_envases > 0): ?>
+                <span class="badge bg-success me-1"><i class="fas fa-boxes me-1"></i><?= $cajas_envases; ?> <?= $cajas_envases == 1 ? 'Caja Envases' : 'Cajas Envases'; ?></span>
+              <?php endif; ?>
+              <?php if($total_productos == 0): ?>
+                <span class="text-muted">Sin productos</span>
+              <?php endif; ?>
+            </td>
+            <td class="d-none d-lg-table-cell">
+              <i class="fas fa-calendar me-1 text-muted"></i><?= datetime2fechayhora($despacho->creada); ?>
+            </td>
+            <td>
+              <?php if($despacho->estado == 'En despacho'): ?>
+                <span class="badge bg-warning text-dark">En despacho</span>
+              <?php elseif($despacho->estado == 'Entregado'): ?>
+                <span class="badge bg-success">Entregado</span>
+              <?php else: ?>
+                <span class="badge bg-secondary"><?= $despacho->estado; ?></span>
+              <?php endif; ?>
+            </td>
+            <td class="text-end pe-3 acciones-cell">
+              <a href="./?s=detalle-despachos&id=<?= $despacho->id; ?>" class="btn btn-sm btn-outline-primary me-1 btn-ver-detalle" title="Ver detalle">
+                <i class="fas fa-eye"></i>
+              </a>
+              <?php if($usuario->nivel == "Administrador"): ?>
+              <button data-iddespachos="<?= $despacho->id; ?>" class="eliminar-despacho-btn btn btn-sm btn-outline-danger" title="Eliminar">
+                <i class="fas fa-trash"></i>
+              </button>
+              <?php endif; ?>
+            </td>
+          </tr>
+          <!-- Fila expandible con detalle de productos -->
+          <tr class="collapse-row">
+            <td colspan="6" class="p-0 border-0">
+              <div class="collapse" id="detalle-despacho-<?= $despacho->id; ?>">
+                <div class="bg-light p-3">
+                  <?php if($total_productos == 0): ?>
+                  <p class="text-muted mb-0 text-center"><i class="fas fa-box-open me-2"></i>No hay productos en este despacho</p>
+                  <?php else: ?>
+                  <div class="table-responsive">
+                    <table class="table table-sm table-bordered mb-0 bg-white">
+                      <thead class="table-secondary">
+                        <tr>
+                          <th style="width: 50px;"></th>
+                          <th>Producto</th>
+                          <th>Tipo</th>
+                          <th class="d-none d-md-table-cell">Cantidad/Litraje</th>
+                          <th class="d-none d-lg-table-cell">Cerveza</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <?php foreach($productos as $producto):
+                          $icon_class = '';
+                          $icon_bg = '';
+                          $nombre_producto = '';
+                          $cantidad_info = '';
+                          $cerveza_info = '-';
+
+                          if($producto->tipo == 'Barril') {
+                            $barril = new Barril($producto->id_barriles);
+                            $icon_class = 'fa-beer';
+                            $icon_bg = 'text-secondary';
+                            $nombre_producto = 'Barril ' . $barril->codigo;
+                            $cantidad_info = $barril->litraje . 'L';
+                            if($barril->id_batches > 0) {
+                              $batch = new Batch($barril->id_batches);
+                              $receta = new Receta($batch->id_recetas);
+                              $cerveza_info = $receta->nombre;
+                            }
+                          } elseif($producto->tipo == 'Caja') {
+                            $icon_class = 'fa-box';
+                            $icon_bg = 'text-info';
+                            $nombre_producto = 'Caja - ' . $producto->codigo;
+                            $cantidad_info = $producto->cantidad . ' unidades';
+                            $cerveza_info = $producto->tipos_cerveza ?: '-';
+                          } elseif($producto->tipo == 'CajaEnvases') {
+                            $caja_envases = $producto->getCajaDeEnvases();
+                            $icon_class = 'fa-boxes';
+                            $icon_bg = 'text-success';
+                            $nombre_producto = 'Caja de Envases';
+                            if($caja_envases) {
+                              $nombre_producto .= ' ' . $caja_envases->codigo;
+                              $cantidad_info = $caja_envases->cantidad_envases . ' envases';
+                            } else {
+                              $cantidad_info = $producto->cantidad . ' envases';
+                            }
+                          }
+                        ?>
+                        <tr>
+                          <td class="text-center align-middle">
+                            <i class="fas <?= $icon_class; ?> <?= $icon_bg; ?>"></i>
+                          </td>
+                          <td class="align-middle">
+                            <strong><?= $nombre_producto; ?></strong>
+                            <small class="text-muted d-block"><?= $producto->codigo; ?></small>
+                          </td>
+                          <td class="align-middle">
+                            <?php if($producto->tipo == 'Barril'): ?>
+                            <span class="badge bg-secondary"><?= $producto->tipo; ?></span>
+                            <?php elseif($producto->tipo == 'Caja'): ?>
+                            <span class="badge bg-info"><?= $producto->tipo; ?></span>
+                            <?php elseif($producto->tipo == 'CajaEnvases'): ?>
+                            <span class="badge bg-success">Envases</span>
+                            <?php else: ?>
+                            <span class="badge bg-dark"><?= $producto->tipo; ?></span>
+                            <?php endif; ?>
+                          </td>
+                          <td class="align-middle d-none d-md-table-cell"><?= $cantidad_info; ?></td>
+                          <td class="align-middle d-none d-lg-table-cell"><?= $cerveza_info; ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                      </tbody>
+                    </table>
+                  </div>
+                  <?php endif; ?>
+                </div>
+              </div>
+            </td>
+          </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <?php endforeach; ?>
+
+  <?php endif; ?>
+
 </div>
 
-<div class="modal modal-fade" tabindex="-1" role="dialog" id="llenar-barriles-modal">
-    <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">
-                    Cargar Barril
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body p-4">
-                <div class="row align-items-bottom">
-                    <div class="col-4 mb-1 border p-3 bg-light" style="border-radius: 10px">
-                        <div class="mt-2 text-center fs-3 fw-bold">
-                            Fermentador
-                        </div>
-                        <select class="form-control mt-2" id="llenar-barriles_id_batches_activos-select">
-                            <?php /*
-                            foreach($batches_activos_maduracion as $bam) {
-                                $activo = new Activo($bam->id_activos);
-                                $batch = new Batch($bam->id_batches);
-                                $receta = new Receta($batch->id_recetas);
-                            ?>
-                            <option value="<?= $bam->id; ?>"><?= $activo->codigo; ?> (<?= $activo->litraje; ?>L - <?= $receta->nombre; ?>)</option>
-                            <?php
-                            }*/
-                            ?>
-                        </select>
-                        <label class="mt-2">
-                            Disponible:
-                        </label>
-                        <div class="input-group">
-                            <input type="number" class="form-control fw-bold fs-3" id="llenar-barriles-fermentador-cantidad-disponible" value="0" READONLY>
-                            <span class="input-group-text fs-3" id="basic-addon1" style="border-radius: 0px 10px 10px 0px">Litros</span>
-                        </div>
-                    </div>
-                    <div class="col-4 mb-1 align-middle text-center fw-bold px-3">
-                        <div class="w-100 text-center">
-                        </div>
-                        <label class="mt-2">
-                            Cantidad a cargar:
-                        </label>
-                        <div class="input-group">
-                            <input type="number" class="form-control fw-bold fs-3" id="llenar-barriles-cantidad-a-cargar" value="0">
-                            <span class="input-group-text fs-3" id="basic-addon1" style="border-radius: 0px 10px 10px 0px">Litros</span>
-                        </div>
-                        <button type="button" class="btn btn-primary mt-3 w-100" id="llenar-barril-aceptar-btn" data-bs-dismiss="modal">
-                            <i class='fas fa-fw fa-forward'></i> Cargar <i class='fas fa-fw fa-forward'></i>
-                        </button>
-
-                    </div>
-                    <div class="col-4 mb-1 border p-3 bg-light" style="border-radius: 10px">
-                        <div class="mt-2 text-center fs-3 fw-bold">
-                            Barril
-                        </div>
-                        <select class="form-control mt-2" id="llenar-barriles_id_barriles-select">
-                            <?php
-                            /*foreach($barriles_disponibles as $bd) {
-                            ?>
-                            <option value="<?= $bd->id; ?>"><?= $bd->codigo; ?></option>
-                            <?php
-                            }*/
-                            ?>
-                        </select>
-                        <label class="mt-2">
-                            Cargado:
-                        </label>
-                        <div class="input-group">
-                            <input type="number" class="form-control fw-bold fs-3" id="llenar-barriles-barril-litros-cargados" READONLY>
-                            <span class="input-group-text fs-3" id="basic-addon1" style="border-radius: 0px 10px 10px 0px">Litros</span>
-                        </div>
-                    </div> 
-                </div>
-            </div>
-        </div>
+<!-- Modal Confirmar Eliminacion -->
+<div class="modal fade" id="eliminar-despacho-modal" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-dialog-centered" role="document">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2"></i>Confirmar Eliminacion</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p>¿Esta seguro de eliminar este despacho?</p>
+        <p class="text-muted mb-0">Esta accion no se puede deshacer.</p>
+        <input type="hidden" id="eliminar-despacho-id" value="">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-danger" id="eliminar-despacho-confirmar-btn">
+          <i class="fas fa-trash me-1"></i> Eliminar
+        </button>
+      </div>
     </div>
+  </div>
 </div>
 
 <script>
 
-
-
-$(document).on('click','.tr-despachos',function(e){
-  window.location.href = "./?s=detalle-despachos&id=" + $(e.currentTarget).data('iddespachos');
+// Rotar icono al expandir/colapsar
+$(document).on('show.bs.collapse', '.collapse', function() {
+  var targetId = $(this).attr('id');
+  $('[data-bs-target="#' + targetId + '"] .toggle-icon').css('transform', 'rotate(90deg)');
+});
+$(document).on('hide.bs.collapse', '.collapse', function() {
+  var targetId = $(this).attr('id');
+  $('[data-bs-target="#' + targetId + '"] .toggle-icon').css('transform', 'rotate(0deg)');
 });
 
+// Evitar propagacion en celda de acciones
+$(document).on('click', '.acciones-cell', function(e) {
+  e.stopPropagation();
+});
+
+// Evitar propagacion en boton ver detalle
+$(document).on('click', '.btn-ver-detalle', function(e) {
+  e.stopPropagation();
+});
+
+// Abrir modal de confirmacion
 $(document).on('click','.eliminar-despacho-btn',function(e){
+  e.preventDefault();
+  e.stopPropagation();
+  var idDespacho = $(this).data('iddespachos');
+  $('#eliminar-despacho-id').val(idDespacho);
+  $('#eliminar-despacho-modal').modal('show');
+});
+
+// Confirmar eliminacion
+$(document).on('click','#eliminar-despacho-confirmar-btn',function(e){
+  var idDespacho = $('#eliminar-despacho-id').val();
   var data = {
-    'id': $(e.currentTarget).data('iddespachos'),
+    'id': idDespacho,
     'modo': 'despachos'
-  }
+  };
   var url = './ajax/ajax_eliminarEntidad.php';
-  $.post(url,data,function(response){
-    console.log(response);
+  $.post(url, data, function(response){
     response = JSON.parse(response);
-    if(response.status!="OK") {
-      alert("Algo fallo");
-      return false;
-    } else {
+    if(response.status == "OK") {
       window.location.href = "./?s=central-despacho&msg=2";
+    } else {
+      alert("Error al eliminar el despacho");
+      $('#eliminar-despacho-modal').modal('hide');
     }
   }).fail(function(){
-    alert("No funciono");
+    alert("Error de conexion");
+    $('#eliminar-despacho-modal').modal('hide');
   });
-});
-
-
-// ----------------------------------------------------------
-// ----------------------------------------------------------
-
-
-
-let barriles_disponibles = <?= json_encode($barriles_disponibles, JSON_PRETTY_PRINT); ?>;
-let batches_activos_maduracion = <?= json_encode($batches_activos_maduracion, JSON_PRETTY_PRINT); ?>;
-
-
-$(document).on('click','#llenar-barriles-btn',function(e){
-    renderLlenarBarrilesDisponibles();
-    renderLlenarBarrilesFermentadores();
-});
-
-$(document).on('change','#llenar-barriles_id_barriles-select',renderLlenarBarrilesDisponibles);
-function renderLlenarBarrilesDisponibles() {
-    const barril = barriles_disponibles.find((b) => b.id == $('#llenar-barriles_id_barriles-select').val());
-    $('#llenar-barriles-barril-litros-cargados').val(barril.litros_cargados);
-}
-
-$(document).on('change','#llenar-barriles_id_batches_activos-select',renderLlenarBarrilesFermentadores);
-function renderLlenarBarrilesFermentadores() {
-    const bam = batches_activos_maduracion.find((b) => b.id == $('#llenar-barriles_id_batches_activos-select').val());
-    $('#llenar-barriles-fermentador-cantidad-disponible').val(bam.litraje);
-    //console.log(bam);
-}
-
-$(document).on('click','#llenar-barril-aceptar-btn',function(e){
-
-    e.preventDefault();
-
-    var data = {
-        'id_batches_activos': $('#llenar-barriles_id_batches_activos-select').val(),
-        'id_barriles': $('#llenar-barriles_id_barriles-select').val(),
-        'cantidad_a_cargar': $('#llenar-barriles-cantidad-a-cargar').val()
-    };
-
-    console.log(data);
-
-    var url = './ajax/ajax_llenarBarriles.php';
-    $.post(url,data,function(response){
-        console.log(response);
-        response = JSON.parse(response);
-        if(response.mensaje!="OK") {
-            alert("Algo fallo");
-            return false;
-        } else {
-            barriles_en_planta_2 = response.obj.barriles_en_planta;
-            armarBarrilesEnPlanta();
-            batches_activos_maduracion = response.obj.batches_activos_maduracion;
-            armarBatchesActivosMaduracion();
-            barriles_disponibles = response.obj.barriles_disponibles_para_carga;
-            armarBarrilesDisponiblesParaCarga();
-            
-        }
-    });
-
 });
 
 </script>

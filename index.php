@@ -4,7 +4,9 @@
 include("./php/app.php");
 
 $usuario = new Usuario;
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 
 $usuario->checkSession($_SESSION);
 $_SESSION['login'] = "cocholgue";
@@ -416,6 +418,7 @@ $registro_asistencia = RegistroAsistencia::getAsistencia($usuario->id,date('Y-m-
     function getNotificaciones() {
       var url = "./ajax/ajax_getNotificaciones.php";
       $.get(url, function(raw) {
+		console.log(raw)
         var response = JSON.parse(raw);
         armarNotificaciones(response.obj);
       });

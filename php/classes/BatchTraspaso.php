@@ -4,6 +4,7 @@
 
     public $id_batches = 0;
     public $cantidad = 0;
+    public $merma_litros = 0;
     public $id_fermentadores_inicio = 0;
     public $id_fermentadores_final = 0;
     public $creada;

@@ -73,17 +73,53 @@
     }
 
     public static function getBarrilesConProducto() {
-      $query = "SELECT b.id AS id_barril, r.nombre, p.id AS id_productos FROM barriles AS b JOIN batches AS ba ON ba.id = b.id_batches JOIN recetas AS r ON r.id = ba.id_recetas LEFT JOIN ( SELECT id_recetas, MIN(id) AS id FROM productos GROUP BY id_recetas ) AS pr ON pr.id_recetas = r.id LEFT JOIN productos AS p ON p.id = pr.id WHERE b.id_batches <> 0 AND b.estado = 'En planta';";      
+      $query = "SELECT b.id AS id_barril, r.nombre, r.id AS id_recetas, p.id AS id_productos FROM barriles AS b JOIN batches AS ba ON ba.id = b.id_batches JOIN recetas AS r ON r.id = ba.id_recetas LEFT JOIN ( SELECT id_recetas, MIN(id) AS id FROM productos GROUP BY id_recetas ) AS pr ON pr.id_recetas = r.id LEFT JOIN productos AS p ON p.id = pr.id WHERE b.id_batches <> 0 AND b.estado = 'En planta';";
       $mysqli = $GLOBALS['mysqli'];
       $mysql_response = $mysqli->query($query);
       $result = [];
       while ($row = mysqli_fetch_assoc($mysql_response)) {
         $barril = new Barril((int)$row['id_barril']);
         $barril->id_productos = isset($row['id_productos']) ? (int)$row['id_productos'] : 0;
+        $barril->id_recetas = isset($row['id_recetas']) ? (int)$row['id_recetas'] : 0;
         $barril->nombre = $row['nombre'];
         $result[] = $barril;
       }
 
+      return $result;
+    }
+
+    public static function getBarrilesParaDespacho() {
+      $query = "SELECT
+                  b.id,
+                  b.codigo,
+                  b.tipo_barril,
+                  b.litraje,
+                  b.litros_cargados,
+                  b.id_batches,
+                  r.id AS id_recetas,
+                  r.nombre AS nombre_receta
+                FROM barriles AS b
+                JOIN batches AS ba ON ba.id = b.id_batches
+                JOIN recetas AS r ON r.id = ba.id_recetas
+                WHERE b.id_batches <> 0
+                AND b.estado = 'En planta'
+                AND b.clasificacion = 'Cerveza'
+                ORDER BY b.codigo ASC";
+      $mysqli = $GLOBALS['mysqli'];
+      $mysql_response = $mysqli->query($query);
+      $result = array();
+      while ($row = mysqli_fetch_assoc($mysql_response)) {
+        $result[] = array(
+          'id' => (int)$row['id'],
+          'codigo' => $row['codigo'],
+          'tipo_barril' => $row['tipo_barril'],
+          'litraje' => (int)$row['litraje'],
+          'litros_cargados' => (int)$row['litros_cargados'],
+          'id_batches' => (int)$row['id_batches'],
+          'id_recetas' => (int)$row['id_recetas'],
+          'nombre_receta' => $row['nombre_receta']
+        );
+      }
       return $result;
     }
 

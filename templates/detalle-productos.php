@@ -3,7 +3,7 @@
   if(!validaIdExists($_GET,'id')) {
       die();
   }
-  
+
   $obj = new Producto($_GET['id']);
 
   $recetas['Cerveza'] = Receta::getAll('WHERE clasificacion="Cerveza"');
@@ -12,6 +12,10 @@
   $recetas['Agua fermentada'] = Receta::getAll('WHERE clasificacion="Agua fermentada"');
 
   $usuario = $GLOBALS['usuario'];
+
+  // Formatos de envases para configuracion de cajas
+  $formatos_latas = FormatoDeEnvases::getAllByTipo('Lata');
+  $formatos_botellas = FormatoDeEnvases::getAllByTipo('Botella');
 
 
  ?>
@@ -55,12 +59,52 @@ Msg::show(1,'Producto guardado con &eacute;xito','info');
             <option>Caja</option>
         </select>
       </div>
-      <div class="col-6 mb-1">
-        Cantidad:
+      <!-- Cantidad Barril (solo visible cuando tipo=Barril) -->
+      <div id="config-cantidad-barril">
+        <div class="row">
+          <div class="col-6 mb-1">
+            Cantidad:
+          </div>
+          <div class="col-6 mb-1">
+            <select class="form-control" name="cantidad">
+            </select>
+          </div>
+        </div>
       </div>
-      <div class="col-6 mb-1">
-        <select class="form-control" name="cantidad">
-        </select>
+      <!-- Configuracion de Envases (solo visible cuando tipo=Caja) -->
+      <div id="config-envases" style="display:none;">
+        <div class="row">
+          <div class="col-6 mb-1">
+            Tipo de Envase:
+          </div>
+          <div class="col-6 mb-1">
+            <select name="tipo_envase" class="form-control">
+              <option value="Lata">Lata</option>
+              <option value="Botella">Botella</option>
+            </select>
+          </div>
+          <div class="col-6 mb-1">
+            Formato:
+          </div>
+          <div class="col-6 mb-1">
+            <select name="id_formatos_de_envases" class="form-control">
+            </select>
+          </div>
+          <div class="col-6 mb-1">
+            Envases por Caja:
+          </div>
+          <div class="col-6 mb-1">
+            <input type="number" name="cantidad_de_envases" class="form-control" min="1" value="0">
+          </div>
+          <div class="col-12 mb-1 mt-2">
+            <div class="form-check">
+              <input type="checkbox" class="form-check-input" name="es_mixto" id="es_mixto_check" value="1">
+              <label class="form-check-label" for="es_mixto_check">
+                <strong>Es Producto Mixto</strong> <small class="text-muted">(acepta m&uacute;ltiples tipos de cerveza)</small>
+              </label>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="col-6 mb-1">
         Clasificaci&oacute;n:
@@ -73,12 +117,26 @@ Msg::show(1,'Producto guardado con &eacute;xito','info');
             <option>Agua fermentada</option>
         </select>
       </div>
-      <div class="col-6 mb-1">
-        Receta:
+      <div id="config-receta">
+        <div class="row">
+          <div class="col-6 mb-1">
+            Receta:
+          </div>
+          <div class="col-6 mb-1">
+            <select class="form-control" name="id_recetas">
+            </select>
+          </div>
+        </div>
       </div>
-      <div class="col-6 mb-1">
-        <select class="form-control" name="id_recetas">
-        </select>
+      <div id="config-receta-mixto" style="display:none;">
+        <div class="row">
+          <div class="col-6 mb-1">
+            Receta:
+          </div>
+          <div class="col-6 mb-1">
+            <input type="text" class="form-control" value="M&uacute;ltiples (Producto Mixto)" disabled>
+          </div>
+        </div>
       </div>
       <div class="col-6 mb-1">
         Monto:
@@ -234,6 +292,8 @@ var obj = <?= json_encode($obj,JSON_PRETTY_PRINT); ?>;
 var items = <?= json_encode($obj->productos_items,JSON_PRETTY_PRINT); ?>;
 var tipos_barril = <?= json_encode($GLOBALS['tipos_barril'],JSON_PRETTY_PRINT); ?>;
 var tipos_caja = <?= json_encode($GLOBALS['tipos_caja'],JSON_PRETTY_PRINT); ?>;
+var formatos_latas = <?= json_encode($formatos_latas,JSON_PRETTY_PRINT); ?>;
+var formatos_botellas = <?= json_encode($formatos_botellas,JSON_PRETTY_PRINT); ?>;
 
 $(function() {
   $.each(obj,function(key,value){
@@ -241,14 +301,44 @@ $(function() {
       $('input[name="'+key+'"]').val(value);
       $('textarea[name="'+key+'"]').val(value);
       $('select[name="'+key+'"]').val(value);
-      console.log('key: ' + key + ' val: ' + value);
     }
   });
   armarRecetasSelect();
   armarCantidadSelect();
   $('select[name="cantidad"]').val(obj['cantidad']);
+
+  // Cargar configuracion de envases si es Caja
+  if(obj.tipo == 'Caja') {
+    $('select[name="tipo_envase"]').val(obj.tipo_envase);
+    armarFormatosSelect();
+    $('select[name="id_formatos_de_envases"]').val(obj.id_formatos_de_envases);
+    $('input[name="cantidad_de_envases"]').val(obj.cantidad_de_envases);
+    // Cargar es_mixto
+    if(obj.es_mixto == 1) {
+      $('#es_mixto_check').prop('checked', true);
+      toggleMixto(true);
+    }
+  }
+
   renderTable();
 });
+
+// Handler para checkbox es_mixto
+$(document).on('change', '#es_mixto_check', function() {
+  toggleMixto($(this).is(':checked'));
+});
+
+function toggleMixto(esMixto) {
+  if(esMixto) {
+    $('#config-receta').hide();
+    $('#config-receta-mixto').show();
+    $('select[name="id_recetas"]').val('0');
+  } else {
+    $('#config-receta').show();
+    $('#config-receta-mixto').hide();
+    armarRecetasSelect();
+  }
+}
 
 $(document).on('change','select[name="clasificacion"]',function(){
     armarRecetasSelect();
@@ -271,19 +361,39 @@ function armarRecetasSelect() {
 }
 
 function armarCantidadSelect() {
+  var tipo = $('select[name="tipo"]').val();
 
-  if($('select[name="tipo"]').val() == 'Barril') {
+  if(tipo == 'Barril') {
     cantidades = tipos_barril;
-  } else {
-    cantidades = tipos_caja;
-  }
-  $('select[name="cantidad"]').empty();
-  cantidades.forEach(function(c) {
-    $('select[name="cantidad"]').append("<option>" + c + "</option>");
-  });
-  
+    $('#config-cantidad-barril').show();
+    $('#config-envases').hide();
 
+    $('select[name="cantidad"]').empty();
+    cantidades.forEach(function(c) {
+      $('select[name="cantidad"]').append("<option>" + c + "</option>");
+    });
+  } else {
+    $('#config-cantidad-barril').hide();
+    $('#config-envases').show();
+    armarFormatosSelect();
+  }
 }
+
+function armarFormatosSelect() {
+  var tipo_envase = $('select[name="tipo_envase"]').val();
+  var formatos = tipo_envase == 'Lata' ? formatos_latas : formatos_botellas;
+
+  $('select[name="id_formatos_de_envases"]').empty();
+  formatos.forEach(function(f) {
+    $('select[name="id_formatos_de_envases"]').append(
+      '<option value="' + f.id + '">' + f.nombre + ' (' + f.volumen_ml + 'ml)</option>'
+    );
+  });
+}
+
+$(document).on('change', 'select[name="tipo_envase"]', function() {
+  armarFormatosSelect();
+});
 
 $(document).on('click','#items-agregar-aceptar-btn',function() {
   items.push({
@@ -340,6 +450,8 @@ $(document).on('click','#guardar-btn',function(e){
   var url = "./ajax/ajax_guardarEntidad.php";
   var data = getDataForm("productos");
   data['items'] = items;
+  // Manejar checkbox es_mixto
+  data['es_mixto'] = $('#es_mixto_check').is(':checked') ? '1' : '0';
 
   console.log(data);
 

@@ -8,6 +8,7 @@
     public $id_entregas;
     public $codigo;
     public $id_barriles;
+    public $id_cajas_de_envases = 0;
     public $monto;
     public $creada;
     public $QtyItem = 1;
@@ -24,6 +25,17 @@
       } else {
         $this->creada = date('Y-m-d H:i:s');
       }
+    }
+
+    /**
+     * Obtener la caja de envases asociada
+     * @return CajaDeEnvases|null
+     */
+    public function getCajaDeEnvases() {
+      if($this->id_cajas_de_envases > 0) {
+        return new CajaDeEnvases($this->id_cajas_de_envases);
+      }
+      return null;
     }
   }
 

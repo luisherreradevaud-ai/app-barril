@@ -20,6 +20,7 @@
         if($despacho_producto->id_barriles != 0) {
           $barril = new Barril($despacho_producto->id_barriles);
           $barril->estado = 'En planta';
+          $barril->registrarCambioDeEstado();
           $barril->save();
         }
         $despacho_producto->delete();
@@ -94,6 +95,7 @@
 
           $barril = new Barril($pedido_producto_array['id_barriles']);
           $barril->estado = 'En despacho';
+          $barril->registrarCambioDeEstado();
           $barril->save();
 
           $despacho_producto = new DespachoProducto;

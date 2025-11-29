@@ -38,6 +38,15 @@
       $producto = new Producto($ep->id_productos);
       $precio = $producto->getClienteProductoPrecio($cliente->id);
 
+      // Generar descripcion segun tipo de producto
+      if($producto->tipo == "Caja" && $producto->cantidad_de_envases > 0) {
+        // Producto de envases (latas/botellas)
+        $descripcion = $producto->tipo_envase . ' x' . $producto->cantidad_de_envases . ' ' . $producto->nombre;
+      } else {
+        // Producto tradicional (barril)
+        $descripcion = $producto->tipo . ' ' . $producto->cantidad . ' ' . $producto->nombre;
+      }
+
       foreach($producto->productos_items as $pi) {
 
         $monto = $pi->monto_bruto;
@@ -55,7 +64,7 @@
           $detalles[] = '{
             "IndExe": false,
             "NmbItem": "'.$pi->nombre.'",
-            "DscItem": "'.$producto->tipo.' '.$producto->cantidad.' '.$producto->nombre.'",
+            "DscItem": "'.$descripcion.'",
             "QtyItem": "'.$ep->QtyItem.'",
             "PrcItem": "'.$monto.'",
             "CodImpAdic": "26"

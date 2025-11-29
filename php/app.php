@@ -16,6 +16,14 @@ if($debug || isset($_GET['debug'])) {
 /////
 
 date_default_timezone_set('America/Santiago');
+
+// Definir base_dir antes del autoloader
+if($_SERVER['HTTP_HOST']=="localhost") {
+  $base_dir = realpath($_SERVER["DOCUMENT_ROOT"])."/app.barril.cl";
+} else {
+  $base_dir = realpath($_SERVER["DOCUMENT_ROOT"]);
+}
+
 spl_autoload_register(function($clase){
   $ruta = $GLOBALS['base_dir']."/php/classes/".str_replace("\\","/",$clase).".php";
   if(is_readable($ruta)){
@@ -27,7 +35,7 @@ spl_autoload_register(function($clase){
 });
 
 // Initialize security system
-Security::init();
+//Security::init();
 
 /*
 session_start();
@@ -63,6 +71,24 @@ $tipos_barril_cerveza = array(
   "PaleAle",
   "Calafate",
   "BIPA"
+);
+
+$estados_barril = array(
+  "En planta",
+  "En despacho",
+  "En terreno",
+  "Pinchado",
+  "Perdido",
+  "Devuelto a planta"
+);
+
+// Estados que el repartidor puede asignar a barriles del cliente
+$estados_barril_repartidor = array(
+  "En terreno",
+  "En despacho",
+  "Pinchado",
+  "Perdido",
+  "Devuelto a planta"
 );
 
 $tipos_caja = array(
@@ -128,12 +154,6 @@ $secciones_clasificacion = [
   'Configuraci&oacute;n',
   "Sistema"
 ];
-
-if($_SERVER['HTTP_HOST']=="localhost") {
-  $base_dir = realpath($_SERVER["DOCUMENT_ROOT"])."/app.barril.cl";
-} else {
-  $base_dir = realpath($_SERVER["DOCUMENT_ROOT"]);
-}
 
 $ajax_route = $base_dir."/ajax/";
 
